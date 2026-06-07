@@ -1,5 +1,12 @@
+# ==========================================
+# Archivos de Compilación (Maven / Java)
+# ==========================================
 HELP.md
 target/
+*.class
+*.jar
+*.war
+*.ear
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
@@ -13,13 +20,16 @@ target/
 .springBeans
 .sts4-cache
 
-### IntelliJ IDEA ###
+# ==========================================
+# Archivos de Configuración del IDE (Entorno)
+# ==========================================
+# IntelliJ IDEA
 .idea
 *.iws
 *.iml
 *.ipr
 
-### NetBeans ###
+# NetBeans
 /nbproject/private/
 /nbbuild/
 /dist/
@@ -29,5 +39,5 @@ build/
 !**/src/main/**/build/
 !**/src/test/**/build/
 
-### VS Code ###
+#VS Code
 .vscode/
