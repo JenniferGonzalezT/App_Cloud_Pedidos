@@ -12,16 +12,16 @@ import software.amazon.awssdk.services.s3.S3Client;
 public class AwsConfig {
 
     // Inyectamos los valores declarados en application.properties
-    @Value("${spring.cloud.aws.credentials.access-key}")
+    @Value("${app.aws.access-key}")
     private String accessKey;
 
-    @Value("${spring.cloud.aws.credentials.secret-key}")
+    @Value("${app.aws.secret-key}")
     private String secretKey;
 
-    @Value("${spring.cloud.aws.credentials.session-token}")
+    @Value("${app.aws.session-token}")
     private String sessionToken;
 
-    @Value("${spring.cloud.aws.region.static}")
+    @Value("${app.aws.region}")
     private String region;
 
     /**
