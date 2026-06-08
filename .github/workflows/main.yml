@@ -6,8 +6,6 @@
 
 name: Deploy Sistema de Pedidos Cloud Native
 
-# El pipeline se ejecutará automáticamente cada vez que se haga un 'push' o 'pull request'
-# hacia la rama principal 'main'.
 on:
   push:
     branches:
@@ -18,7 +16,6 @@ on:
 
 jobs:
   build:
-    # Se utiliza un entorno virtual de Ubuntu actualizado para compilar y construir
     runs-on: ubuntu-latest
 
     steps:
@@ -29,8 +26,24 @@ jobs:
         uses: actions/checkout@v3
 
       # -------------------------------------------------------------------------
-      # PASO 2: Autenticarse en Docker Hub
-      # Usa los secretos guardados en GitHub para iniciar sesión de forma segura
+      # PASO 2: Configurar el entorno de ejecución con Java 21
+      # -------------------------------------------------------------------------
+      - name: Set up JDK 21
+        uses: actions/setup-java@v3
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      # -------------------------------------------------------------------------
+      # PASO 3: Compilar y construir el archivo JAR con Maven
+      # Omitimos los test unitarios con -DskipTests para acelerar el pipeline
+      # -------------------------------------------------------------------------
+      - name: Build with Maven
+        run: mvn clean package -DskipTests
+
+      # -------------------------------------------------------------------------
+      # PASO 4: Autenticarse en Docker Hub
       # -------------------------------------------------------------------------
       - name: Log in to DockerHub
         uses: docker/login-action@v2
@@ -39,21 +52,21 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       # -------------------------------------------------------------------------
-      # PASO 3: Construir la imagen de Docker usando el Dockerfile del proyecto
+      # PASO 5: Construir la imagen de Docker usando el Dockerfile del proyecto
       # -------------------------------------------------------------------------
       - name: Build Docker Image
         run: |
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/app-pedidos:latest .
 
       # -------------------------------------------------------------------------
-      # PASO 4: Subir (Push) la imagen recién creada a la cuenta de Docker Hub
+      # PASO 6: Subir (Push) la imagen recién creada a la cuenta de Docker Hub
       # -------------------------------------------------------------------------
       - name: Push Docker Image
         run: |
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/app-pedidos:latest
 
       # -------------------------------------------------------------------------
-      # PASO 5: Configurar credenciales temporales de AWS
+      # PASO 7: Configurar credenciales temporales de AWS
       # -------------------------------------------------------------------------
       - name: Set up AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
@@ -64,7 +77,7 @@ jobs:
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
 
       # -------------------------------------------------------------------------
-      # PASO 5.5: Inyectar la Llave SSH Privada (.pem) en el runner de GitHub
+      # PASO 7.5: Inyectar la Llave SSH Privada (.pem) en el runner de GitHub
       # -------------------------------------------------------------------------
       - name: Add SSH Key
         run: |
@@ -73,22 +86,22 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
 
       # -------------------------------------------------------------------------
-      # PASO 6: Conexión remota por SSH a la EC2 y Despliegue de la Aplicación
+      # PASO 8: Conexión remota por SSH a la EC2 y Despliegue de la Aplicación
       # -------------------------------------------------------------------------
       - name: SSH commands to deploy
         run: |
           ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${{ secrets.USER_SERVER }}@${{ secrets.EC2_HOST }} << 'EOF'
             
-            # 1. Autenticar la máquina EC2 en DockerHub para poder descargar la imagen
+            # 1. Autenticar la máquina EC2 en DockerHub
             echo ${{ secrets.DOCKERHUB_TOKEN }} | docker login -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
             
-            # 2. Descargar (Pull) la versión más reciente de la imagen que subimos en el Paso 4
+            # 2. Descargar (Pull) la versión más reciente de la imagen
             docker pull ${{ secrets.DOCKERHUB_USERNAME }}/app-pedidos:latest
             
-            # 3. Limpieza preventiva: Si hay un contenedor corriendo con el mismo nombre, lo detiene y elimina
+            # 3. Limpieza preventiva de contenedores anteriores
             docker stop app-pedidos || true && docker rm app-pedidos || true
             
-            # 4. Lanzamiento del Contenedor (Docker Run)
+            # 4. Lanzamiento del Contenedor con amarre al volumen EFS
             #    -p 8080:8080                      -> Expone el puerto de la API REST.
             #    -e APP_AWS_ACCESS_KEY_ID          -> Inyecta la credencial de acceso AWS.
             #    -e APP_AWS_SECRET_ACCESS_KEY      -> Inyecta la credencial secreta AWS.
@@ -96,6 +109,7 @@ jobs:
             #    -e APP_EFS_PATH=/app/efs          -> Configura la ruta de trabajo interna para las guías temporales.
             #    -v /mnt/efs:/app/efs              -> Vincula la carpeta local del Amazon EFS 
             #                                         montado en la EC2 con el almacenamiento interno del contenedor.
+
             docker run -d --name app-pedidos \
               -p 8080:8080 \
               -e APP_AWS_ACCESS_KEY_ID="${{ secrets.AWS_ACCESS_KEY_ID }}" \
