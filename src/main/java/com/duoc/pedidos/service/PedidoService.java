@@ -68,14 +68,13 @@ public class PedidoService {
         // Dejamos la lógica de borrado comentada intencionalmente.
         // Esto permite comprobar que el archivo se genera con éxito en el EFS,
         // garantizando la persistencia intermedia requerida antes de ser enviado a S3.
-        /*
+        
         if (archivoGuia.exists()) {
             boolean eliminado = archivoGuia.delete();
             if (eliminado) {
                 System.out.println("Archivo temporal eliminado con éxito del volumen EFS.");
             }
         }
-        */
 
         return convertirADTO(pedidoGuardado);
     }
