@@ -101,20 +101,28 @@ jobs:
             # 3. Limpieza preventiva de contenedores anteriores
             docker stop app-pedidos || true && docker rm app-pedidos || true
             
-            # 4. Lanzamiento del Contenedor con amarre al volumen EFS
+            # 4. Lanzamiento del Contenedor (Docker Run) con amarre integral a AWS S3, EFS y RabbitMQ
             #    -p 8080:8080                      -> Expone el puerto de la API REST.
+            #    --network rabbitmq_default        -> Conecta el contenedor a la red virtual donde vive RabbitMQ.
             #    -e APP_AWS_ACCESS_KEY_ID          -> Inyecta la credencial de acceso AWS.
             #    -e APP_AWS_SECRET_ACCESS_KEY      -> Inyecta la credencial secreta AWS.
             #    -e APP_AWS_SESSION_TOKEN          -> Inyecta el token de sesión dinámico educativo.
+            #    -e RABBITMQ_USER                  -> Pasa el usuario de RabbitMQ desde los secretos de GitHub.
+            #    -e RABBITMQ_PASS                  -> Pasa la contraseña de RabbitMQ desde los secretos de GitHub.
+            #    -e RABBITMQ_HOST                  -> Define el nombre del contenedor de RabbitMQ como host en la red interna.
             #    -e APP_EFS_PATH=/app/efs          -> Configura la ruta de trabajo interna para las guías temporales.
             #    -v /mnt/efs:/app/efs              -> Vincula la carpeta local del Amazon EFS 
             #                                         montado en la EC2 con el almacenamiento interno del contenedor.
 
             docker run -d --name app-pedidos \
               -p 8080:8080 \
+              --network rabbitmq_default \
               -e APP_AWS_ACCESS_KEY_ID="${{ secrets.AWS_ACCESS_KEY_ID }}" \
               -e APP_AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_ACCESS_KEY }}" \
               -e APP_AWS_SESSION_TOKEN="${{ secrets.AWS_SESSION_TOKEN }}" \
+              -e RABBITMQ_USER="${{ secrets.RABBITMQ_USER }}" \
+              -e RABBITMQ_PASS="${{ secrets.RABBITMQ_PASS }}" \
+              -e RABBITMQ_HOST="rabbitmq-cloud" \
               -e APP_EFS_PATH="/app/efs" \
               -v /mnt/efs:/app/efs \
               ${{ secrets.DOCKERHUB_USERNAME }}/app-pedidos:latest
