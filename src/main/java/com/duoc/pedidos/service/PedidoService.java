@@ -1,13 +1,5 @@
 package com.duoc.pedidos.service;
 
-import com.duoc.pedidos.dto.PedidoRequestDTO;
-import com.duoc.pedidos.dto.PedidoResponseDTO;
-import com.duoc.pedidos.model.Pedido;
-import com.duoc.pedidos.repository.PedidoRepository;
-import com.duoc.pedidos.repository.S3Repository;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
-
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -20,20 +12,34 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+import com.duoc.pedidos.config.RabbitMQConfig;
+import com.duoc.pedidos.dto.PedidoRequestDTO;
+import com.duoc.pedidos.dto.PedidoResponseDTO;
+import com.duoc.pedidos.model.Pedido;
+import com.duoc.pedidos.repository.PedidoRepository;
+import com.duoc.pedidos.repository.S3Repository;
+
 @Service
 public class PedidoService {
 
     private final PedidoRepository pedidoRepository;
     private final S3Repository s3Repository;
     private final String efsPath;
+    private final RabbitTemplate rabbitTemplate;
 
     // Inyectamos los repositorios y la propiedad del volumen de EFS
     public PedidoService(PedidoRepository pedidoRepository, 
                          S3Repository s3Repository, 
-                         @Value("${app.efs.path}") String efsPath) {
+                         @Value("${app.efs.path}") String efsPath,
+                         RabbitTemplate rabbitTemplate) {
         this.pedidoRepository = pedidoRepository;
         this.s3Repository = s3Repository;
         this.efsPath = efsPath;
+        this.rabbitTemplate = rabbitTemplate;
     }
 
     /**
@@ -68,13 +74,17 @@ public class PedidoService {
         // Dejamos la lógica de borrado comentada intencionalmente.
         // Esto permite comprobar que el archivo se genera con éxito en el EFS,
         // garantizando la persistencia intermedia requerida antes de ser enviado a S3.
-        
+        /*
         if (archivoGuia.exists()) {
             boolean eliminado = archivoGuia.delete();
             if (eliminado) {
                 System.out.println("Archivo temporal eliminado con éxito del volumen EFS.");
             }
         }
+        */
+
+        // 6. [REQUERIMIENTO RabbitMQ]: Enviar el pedido a la cola
+        enviarPedidoAColaMQ(pedidoGuardado);
 
         return convertirADTO(pedidoGuardado);
     }
@@ -160,9 +170,12 @@ public class PedidoService {
     }
 
     // ===================================================================
-    // MÉTODOS DE APOYO INTERNOS (Manejo de archivos EFS y mapeo DTO)
+    // MÉTODOS DE APOYO INTERNOS
     // ===================================================================
     
+    /**
+     * Manejo de archivos EFS mapeo DTO
+     */
     private File generarArchivoGuiaTemporal(Pedido pedido) {
         try {
             // Asegurar que la raíz del directorio EFS local o compartido exista físicamente
@@ -198,6 +211,9 @@ public class PedidoService {
         }
     }
 
+     /**
+     * Mapeo DTO
+     */
     private PedidoResponseDTO convertirADTO(Pedido pedido) {
         return new PedidoResponseDTO(
                 pedido.getId(),
@@ -209,5 +225,25 @@ public class PedidoService {
                 pedido.getFechaCreacion(),
                 pedido.getS3Url()
         );
+    }
+
+     /**
+     * Productor para enviar un pedido a la cola MQ
+     */
+    private void enviarPedidoAColaMQ(Pedido pedido) {
+        System.out.println("====== PRODUCER: Iniciando envío a RabbitMQ ======");
+        
+        try {
+            // Enviamos el objeto directamente. Spring lo transforma a JSON.
+            rabbitTemplate.convertAndSend(
+                RabbitMQConfig.EXCHANGE, 
+                RabbitMQConfig.ROUTING_KEY, 
+                pedido
+            );
+            System.out.println("====== PRODUCER: Pedido encolado con éxito: " + pedido.getCodigoPedido() + " ======");
+        } catch (Exception e) {
+            System.err.println("====== PRODUCER: Error al enviar a RabbitMQ ======");
+            e.printStackTrace();
+        }
     }
 }
