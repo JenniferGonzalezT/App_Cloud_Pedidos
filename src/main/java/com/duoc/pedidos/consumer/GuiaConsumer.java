@@ -22,6 +22,13 @@ public class GuiaConsumer {
         System.out.println("Procesando guía para el pedido: " + pedido.getCodigoPedido());
 
         try {
+
+            // --- CÓDIGO DE PRUEBA PARA DEMOSTRAR DLQ ---
+            if (pedido.getCodigoPedido().contains("ERROR")) {
+                throw new RuntimeException("Fallo inducido para demostrar el enrutamiento a la Cola 2");
+            }
+            // -------------------------------------------
+
             // Transformar el Pedido a GuiaPedido y guardar en la nueva tabla
             GuiaPedido nuevaGuia = new GuiaPedido();
             nuevaGuia.setCodigoPedidoOriginal(pedido.getCodigoPedido());
